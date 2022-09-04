@@ -1,6 +1,7 @@
-# Fastify + Mercurius based Alternative Prisma Data Proxy
+# Fastify + Mercurius based Alternative [Prisma Data Proxy](https://www.prisma.io/docs/concepts/data-platform/data-proxy)
 
 This is a straightforward [Prisma Data Proxy](https://www.prisma.io/docs/concepts/data-platform/data-proxy) self-hosted implementation.
+
 Credits: Inspired by @aiji42's work on [prisma-data-proxy-alt](https://github.com/aiji42/prisma-data-proxy-alt).
 
 ![image](https://user-images.githubusercontent.com/1294640/188299217-77ea1700-b06e-44b3-9f09-20e646b985ba.png)
