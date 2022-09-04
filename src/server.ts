@@ -20,6 +20,7 @@ import { serializeRawResults } from './lib/prisma/serializeRawResult'
 import { digAggregateField } from './lib/prisma/digAggregateField'
 import { prismaQueryEvent } from './lib/prisma/prismaQueryEvent'
 import highlight from 'cli-highlight'
+import { retryMiddleware } from './lib/prisma/retryMiddleware'
 
 const __filename = url.fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -64,6 +65,8 @@ async function main() {
         }
       : undefined,
   )
+  db.$use(retryMiddleware())
+
   await db.$connect()
   marky.stop('prisma-connect')
 
