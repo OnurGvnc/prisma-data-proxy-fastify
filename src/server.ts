@@ -4,6 +4,7 @@ import url from 'node:url'
 
 import Fastify, { FastifyRequest } from 'fastify'
 import fastifyCors from '@fastify/cors'
+import fastifyEnv from '@fastify/env'
 import pino from 'pino'
 import GracefulServer from '@gquittet/graceful-server'
 import marky from 'marky'
@@ -12,7 +13,6 @@ import mercurius, { IFieldResolver } from 'mercurius'
 import { SelectionNode } from 'graphql'
 
 import { Prisma, PrismaClient } from '@prisma/client'
-
 import { getDMMF } from '@prisma/sdk/dist/engine-commands/getDmmf.js'
 import { getSchemaSync } from '@prisma/sdk/dist/cli/getSchema.js'
 
@@ -20,9 +20,6 @@ import { format as sqlFormat } from 'sql-formatter'
 import { highlight } from 'cli-highlight'
 
 import Decimal from 'decimal.js'
-import fastifyEnv from '@fastify/env'
-
-// marky package typescript definations
 
 const __filename = url.fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -52,7 +49,6 @@ const logger = pino({
     target: 'pino-pretty',
     options: {
       colorize: true,
-      level: process.env.NODE_ENV != 'development' ? 'error' : 'info',
     },
   },
 })
@@ -73,23 +69,23 @@ async function main() {
 
   db.$on('query', prismaQueryEvent)
 
+  let certsDir = path.join(__dirname, '..', 'certs')
+
+  if (
+    !fs.existsSync(path.join(certsDir, 'cert-key.pem')) ||
+    !fs.existsSync(path.join(certsDir, 'cert.pem'))
+  ) {
+    console.error('certs not found!', { certsDir })
+    process.exit()
+  }
+
   // FASTIFY INIT
   const app = Fastify({
     https: {
-      key: fs.readFileSync(path.join(__dirname, 'certs', 'cert-key.pem')),
-      cert: fs.readFileSync(path.join(__dirname, 'certs', 'cert.pem')),
+      key: fs.readFileSync(path.join(certsDir, 'cert-key.pem')),
+      cert: fs.readFileSync(path.join(certsDir, 'cert.pem')),
     },
-    logger: {
-      transport:
-        process.env.NODE_ENV === 'development'
-          ? {
-              target: 'pino-pretty',
-              options: {
-                // ignore: 'pid,hostname',
-              },
-            }
-          : undefined,
-    },
+    logger,
   })
 
   const gracefulServer = GracefulServer(app.server)
@@ -98,13 +94,13 @@ async function main() {
   })
 
   gracefulServer.on(GracefulServer.SHUTTING_DOWN, () => {
-    logger.warn('Server is shutting down')
+    console.warn('Server is shutting down')
     db.$disconnect()
     app.close()
   })
 
   gracefulServer.on(GracefulServer.SHUTDOWN, (error) => {
-    // logger.error('Server is down because of', error.message)
+    // console.error('Server is down because of', error.message)
     db.$disconnect()
     app.close()
   })

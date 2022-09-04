@@ -5,12 +5,12 @@ import { spawn } from 'child_process'
 const port = 3010
 
 const paths = {
-  dist: path.join(__dirname, 'dist'),
-  cert: path.join(__dirname, 'certs'),
+  dist: path.join(__dirname, 'dist', 'src'),
+  cert: path.join(__dirname, 'dist', 'certs'),
 }
 
-const entrypoint = path.join(__dirname, 'server.ts')
-const outfile = path.join(__dirname, 'dist', 'server.mjs')
+const entrypoint = path.join(__dirname, 'src', 'server.ts')
+const outfile = path.join(__dirname, 'dist', 'src', 'server.mjs')
 
 export default defineConfig(async (options) => {
   if (!options.watch) {
@@ -18,7 +18,7 @@ export default defineConfig(async (options) => {
   }
 
   if (!fs.existsSync(paths.cert)) {
-    fs.mkdirSync(paths.cert)
+    fs.mkdirpSync(paths.cert)
     // prettier-ignore
     await $`mkcert -key-file ${path.join(paths.cert,'cert-key.pem')} -cert-file ${path.join(paths.cert,'cert.pem')} "localhost"`
   }
@@ -32,18 +32,14 @@ export default defineConfig(async (options) => {
   return {
     entry: [entrypoint],
     splitting: false,
+    outDir: paths.dist,
     sourcemap: options.watch ? 'inline' : false,
     minify: !options.watch,
-    // clean: true,
+    clean: true,
     format: 'esm',
     target: 'node16.16.0',
 
     onSuccess: async () => {
-      fs.cpSync(paths.cert, path.join(paths.dist, 'certs'), {
-        force: true,
-        recursive: true,
-      })
-
       if (options.watch) {
         const cmd = spawn(
           'node',
