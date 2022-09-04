@@ -10,16 +10,16 @@ import GracefulServer from '@gquittet/graceful-server'
 import marky from 'marky'
 
 import mercurius, { IFieldResolver } from 'mercurius'
-import { SelectionNode } from 'graphql'
 
-import { Prisma, PrismaClient } from '@prisma/client'
+import { PrismaClient } from '@prisma/client'
 import { getDMMF } from '@prisma/sdk/dist/engine-commands/getDmmf.js'
 import { getSchemaSync } from '@prisma/sdk/dist/cli/getSchema.js'
 
-import { format as sqlFormat } from 'sql-formatter'
-import { highlight } from 'cli-highlight'
-
-import Decimal from 'decimal.js'
+import { camelCase } from './utils'
+import { serializeRawResults } from './lib/prisma/serializeRawResult'
+import { digAggregateField } from './lib/prisma/digAggregateField'
+import { prismaQueryEvent } from './lib/prisma/prismaQueryEvent'
+import highlight from 'cli-highlight'
 
 const __filename = url.fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -252,7 +252,7 @@ async function main() {
           )
 
           // @ts-ignore
-          let result = await db[toLowerFirstLetter(model.name)]
+          let result = await db[camelCase(model.name)]
             .findUnique({ where: { [idFieldName]: parent[idFieldName] } })
             [field.name](args)
 
@@ -296,7 +296,7 @@ async function main() {
         upsertOne: modelOperation.upsertOne!,
       }
 
-      const modelName = toLowerFirstLetter(model)
+      const modelName = camelCase(model)
 
       resolvers.Query[m.findFirst] = async (root, args, context, info) => {
         // @ts-ignore
@@ -465,207 +465,3 @@ async function main() {
 }
 
 main()
-
-// -------------------------------------------------------------------------- //
-// digAggregateField
-//
-// credits:
-// - https://github.com/aiji42/prisma-data-proxy-alt/blob/b9d7faea38b21e899903fcc9fa221f0f3d87db7c/src/helpers/makeResolver.ts#L29
-
-interface AggregateField {
-  [x: string]: true | AggregateField
-}
-
-function digAggregateField(
-  selections: readonly SelectionNode[],
-  isRoot: boolean = true,
-): AggregateField {
-  return selections.reduce((res, selection) => {
-    if (
-      'name' in selection &&
-      'selectionSet' in selection &&
-      !(isRoot && !selection.name.value.startsWith('_'))
-    ) {
-      const dug = digAggregateField(
-        selection.selectionSet?.selections ?? [],
-        false,
-      )
-      return {
-        ...res,
-        [selection.name.value]: Object.keys(dug).length ? dug : true,
-      }
-    }
-    return res
-  }, {})
-}
-
-// -------------------------------------------------------------------------- //
-// utils
-//
-
-function toLowerFirstLetter(str: string) {
-  return str.charAt(0).toLowerCase() + str.substring(1)
-}
-
-// -------------------------------------------------------------------------- //
-// prismaQueryEvent
-//
-
-function prismaQueryEvent(e: Prisma.QueryEvent) {
-  if (process.env.NODE_ENV == 'development') {
-    console.log('')
-    console.log(''.padStart(100, '🟧'))
-
-    let query = e.query.replaceAll('"public".', '')
-
-    ;(JSON.parse(e.params ?? '[]') as any[]).forEach((val, index) => {
-      if (typeof val == 'string') {
-        val = `'${val}'`
-      }
-      if (typeof val == 'boolean') {
-        val = val ? 'true' : 'false'
-      }
-      query = query.replace(`$${index + 1}`, val)
-    })
-
-    query = sqlFormat(query, {
-      language: 'postgresql',
-      tabWidth: 2,
-      keywordCase: 'lower',
-      linesBetweenQueries: 2,
-      tabulateAlias: true,
-    })
-
-    console.log(
-      highlight(query, {
-        language: 'sql',
-        ignoreIllegals: true,
-      }),
-    )
-
-    console.log('')
-    console.log(JSON.parse(e.params ?? '[]'), e.duration + 'ms')
-
-    console.log(''.padStart(100, '🟩'))
-  }
-}
-
-// -------------------------------------------------------------------------- //
-// serializeRawResults
-//
-// credits:
-// - https://github.com/prisma/prisma/blob/main/packages/client/src/runtime/utils/deserializeRawResults.ts
-// - https://github.com/prisma/prisma/blob/main/packages/client/src/runtime/utils/serializeRawParameters.ts
-
-// prettier-ignore
-type PrismaType = 'int' | 'bigint' | 'float' | 'double' | 'string' | 'enum' | 'bytes' | 'bool' | 'char' | 'decimal' | 'json' | 'xml' | 'uuid' | 'datetime' | 'date' | 'time' | 'array' | 'null'
-
-type TypedValue = {
-  prisma__type: PrismaType
-  prisma__value: unknown
-}
-
-function serializeRawResults(
-  rows: Array<Record<string, PrismaType>>,
-): Record<string, TypedValue>[] {
-  return rows.map((row) => {
-    const mappedRow = {} as Record<string, TypedValue>
-
-    for (const key of Object.keys(row)) {
-      mappedRow[key] = serializeValue(row[key])
-    }
-    return mappedRow
-  })
-}
-
-function serializeValue(val: PrismaType): TypedValue {
-  if (typeof val === 'bigint') {
-    return {
-      prisma__type: 'bigint',
-      prisma__value: (val as bigint).toString(),
-    }
-  }
-
-  if (isDate(val)) {
-    return {
-      prisma__type: 'date',
-      prisma__value: val.toJSON(),
-    }
-  }
-
-  if (Decimal.isDecimal(val)) {
-    return {
-      prisma__type: 'decimal',
-      prisma__value: val.toJSON(),
-    }
-  }
-
-  if (Buffer.isBuffer(val)) {
-    return {
-      prisma__type: 'bytes',
-      prisma__value: val.toString('base64'),
-    }
-  }
-
-  if (isArrayBufferLike(val) || ArrayBuffer.isView(val)) {
-    return {
-      prisma__type: 'bytes',
-      prisma__value: Buffer.from(val as ArrayBuffer).toString('base64'),
-    }
-  }
-
-  if (typeof val === 'object' && val !== null) {
-    return {
-      prisma__type: 'json',
-      prisma__value: JSON.stringify(val),
-    }
-  }
-
-  if (isArrayBufferLike(val) || ArrayBuffer.isView(val)) {
-    return {
-      prisma__type: 'bytes',
-      prisma__value: Buffer.from(val as ArrayBuffer).toString('base64'),
-    }
-  }
-
-  if (val == null) {
-    return {
-      prisma__type: 'null',
-      prisma__value: null,
-    }
-  }
-
-  return {
-    // @ts-ignore
-    prisma__type: typeof val,
-    prisma__value: val,
-  }
-}
-
-function isDate(value: any): value is Date {
-  if (value instanceof Date) {
-    return true
-  }
-
-  // Support dates created in another V8 context
-  // Note: dates don't have Symbol.toStringTag defined
-  return (
-    Object.prototype.toString.call(value) === '[object Date]' &&
-    typeof value.toJSON === 'function'
-  )
-}
-
-function isArrayBufferLike(value: any): value is ArrayBufferLike {
-  if (value instanceof ArrayBuffer || value instanceof SharedArrayBuffer) {
-    return true
-  }
-
-  if (typeof value === 'object' && value !== null) {
-    return (
-      value[Symbol.toStringTag] === 'ArrayBuffer' ||
-      value[Symbol.toStringTag] === 'SharedArrayBuffer'
-    )
-  }
-
-  return false
-}
