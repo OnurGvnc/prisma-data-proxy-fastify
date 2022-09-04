@@ -18,6 +18,6 @@
     "swc": true,
     "transpileOnly": true
   },
-  "include": ["server.ts"],
+  "include": ["server.ts", "global.d.ts"],
   "exclude": ["node_modules", "generators"]
 }

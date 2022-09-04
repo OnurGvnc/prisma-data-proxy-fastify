@@ -5,6 +5,8 @@ import url from 'node:url'
 import Fastify, { FastifyRequest } from 'fastify'
 import fastifyCors from '@fastify/cors'
 import pino from 'pino'
+import GracefulServer from '@gquittet/graceful-server'
+import marky from 'marky'
 
 import mercurius, { IFieldResolver } from 'mercurius'
 import { SelectionNode } from 'graphql'
@@ -20,9 +22,12 @@ import { highlight } from 'cli-highlight'
 import Decimal from 'decimal.js'
 import fastifyEnv from '@fastify/env'
 
+// marky package typescript definations
+
 const __filename = url.fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+marky.mark('ready')
 const dotenvSchema = {
   type: 'object',
   required: ['PORT', 'DATA_PROXY_API_KEY', 'NODE_ENV', 'PRISMA_SCHEMA_PATH'],
@@ -47,13 +52,14 @@ const logger = pino({
     target: 'pino-pretty',
     options: {
       colorize: true,
-      level: process.env.NODE_ENV == 'development' ? 'error' : 'info',
+      level: process.env.NODE_ENV != 'development' ? 'error' : 'info',
     },
   },
 })
 
 async function main() {
   // PRISMA INIT
+  marky.mark('prisma-connect')
   const db = new PrismaClient(
     process.env.NODE_ENV == 'development'
       ? // prettier-ignore
@@ -63,6 +69,7 @@ async function main() {
       : undefined,
   )
   await db.$connect()
+  marky.stop('prisma-connect')
 
   db.$on('query', prismaQueryEvent)
 
@@ -78,12 +85,28 @@ async function main() {
           ? {
               target: 'pino-pretty',
               options: {
-                translateTime: 'HH:MM:ss Z',
-                ignore: 'pid,hostname',
+                // ignore: 'pid,hostname',
               },
             }
           : undefined,
     },
+  })
+
+  const gracefulServer = GracefulServer(app.server)
+  gracefulServer.on(GracefulServer.READY, () => {
+    logger.info('Server is ready')
+  })
+
+  gracefulServer.on(GracefulServer.SHUTTING_DOWN, () => {
+    logger.warn('Server is shutting down')
+    db.$disconnect()
+    app.close()
+  })
+
+  gracefulServer.on(GracefulServer.SHUTDOWN, (error) => {
+    // logger.error('Server is down because of', error.message)
+    db.$disconnect()
+    app.close()
   })
 
   // FASTIFY PLUGINS
@@ -144,9 +167,12 @@ async function main() {
   })
 
   // TYPEDEFS
+
+  marky.mark('dmmf')
   const dmmf = await getDMMF({
     datamodel: getSchemaSync(process.env.PRISMA_SCHEMA_PATH),
   })
+  marky.stop('dmmf')
 
   const getTypeDefs = () => {
     const enums = [
@@ -384,13 +410,17 @@ async function main() {
     return resolvers
   }
 
+  marky.mark('schema + resolvers')
   const schema = getTypeDefs()
+  const resolvers = getResolvers()
+  marky.stop('schema + resolvers')
 
+  marky.mark('mercurius')
   app.register(mercurius, {
     // path: '/4.3.0/1652b26cd5d76232b4f6130712465b4d89c28f0a05c9f2007753c76150c738dd/graphql',
     path: '/*',
     schema,
-    resolvers: getResolvers(),
+    resolvers,
     graphiql: true,
     // validationRules: [NoSchemaIntrospectionCustomRule],
     errorFormatter: (execution, context) => {
@@ -402,6 +432,7 @@ async function main() {
   })
 
   await app.ready()
+  marky.stop('mercurius')
 
   // hooks
   //  preParsing | preValidation | preExecution | onResolution
@@ -420,12 +451,19 @@ async function main() {
 
   const port = parseInt(process.env.PORT + '', 10)
   try {
-    app.listen({ port, host: '0.0.0.0' }).catch(logger.error)
-    logger.info(
+    app.listen({ port, host: '0.0.0.0' }).catch(console.error)
+    app.log.info(
       `🏁 Started on port ${port}  processid:${process.pid} [${process.env.NODE_ENV}]`,
     )
+    gracefulServer.setReady()
+    marky.stop('ready')
+    marky.getEntries().forEach((entry) => {
+      app.log.info(
+        `⏱  ${entry.duration.toFixed(2).padStart(8, ' ')} ms   ${entry.name}`,
+      )
+    })
   } catch (err) {
-    app.log.error(err)
+    logger.error(err)
     process.exit(1)
   }
 }

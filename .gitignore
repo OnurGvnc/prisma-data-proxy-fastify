@@ -2,3 +2,4 @@ node_modules/
 dist/
 .env
 certs/
+yarn-error.log

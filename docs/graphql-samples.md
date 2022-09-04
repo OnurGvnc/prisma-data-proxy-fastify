@@ -14,7 +14,7 @@ mutation {
 ```gql
 mutation {
   executeRaw(
-    query: "update\n          \"urun\"\n        set\n          \"tmp\" = 'd!'\n        where\n          \"urun\".\"ID\" in ($1,$2)\n      "
+    query: "update\n          \"product\"\n        set\n          \"name\" = 'product2!'\n        where\n          \"product\".\"ID\" in ($1,$2)\n      "
     parameters: "[5,6]"
   )
 }
@@ -26,15 +26,11 @@ mutation {
 query {
   findManyProduct(where: { isActive: 1, isDraft: 0, ID: 365 }) {
     ID
-    kategoriID
-    # isActive
-    # status
-    # isDraft
-    urun_ {
+    status
+    product_ {
       id
       langCode
-      adi
-      # detay
+      name
       entityID
       createdAt
       updatedAt
@@ -47,12 +43,10 @@ query {
 
 ```gql
 mutation {
-  createOneProduct(data: { tmp: "deneme urunu1662252129727" }) {
+  createOneProduct(data: { name: "PRODUCT!" }) {
     ID
-    kategoriID
+    name
     isActive
-    status
-    tmp
   }
 }
 ```
@@ -61,12 +55,7 @@ mutation {
 
 ```gql
 mutation {
-  createManyProduct(
-    data: [
-      { tmp: "deneme urunu1662253233994" }
-      { tmp: "deneme urunu #21662253233994" }
-    ]
-  ) {
+  createManyProduct(data: [{ name: "PRODUCT 1" }, { name: "PRODUCT 2" }]) {
     count
   }
 }
@@ -76,12 +65,8 @@ mutation {
 
 ```gql
 mutation {
-  deleteOneurun(where: { ID: 11 }) {
+  deleteOneProduct(where: { ID: 11 }) {
     ID
-    kategoriID
-    isActive
-    status
-    tmp
   }
 }
 ```
@@ -90,7 +75,7 @@ mutation {
 
 ```gql
 mutation {
-  deleteManyurun(where: { ID: { in: [8, 9] } }) {
+  deleteManyProduct(where: { ID: { in: [8, 9] } }) {
     count
   }
 }
@@ -100,12 +85,10 @@ mutation {
 
 ```gql
 mutation {
-  updateOneurun(data: { tmp: "heyooo!" }, where: { ID: 5 }) {
+  updateOneProduct(data: { name: "BLABLA!" }, where: { ID: 5 }) {
     ID
-    kategoriID
-    isActive
+    name
     status
-    tmp
   }
 }
 ```
@@ -114,7 +97,7 @@ mutation {
 
 ```gql
 mutation {
-  updateManyurun(data: { tmp: "heyooo!" }, where: { ID: { in: [5, 6] } }) {
+  updateManyProductn(data: { name: "BLABLA!" }, where: { ID: { in: [5, 6] } }) {
     count
   }
 }
@@ -124,16 +107,14 @@ mutation {
 
 ```gql
 mutation {
-  upsertOneurun(
+  upsertOneProduct(
     where: { ID: 5 }
-    update: { tmp: "dsadsa6" }
-    create: { tmp: "dsadsa5" }
+    update: { name: "BLA1" }
+    create: { name: "BLA2" }
   ) {
     ID
-    kategoriID
-    isActive
+    name
     status
-    tmp
   }
 }
 ```
