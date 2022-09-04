@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "tsup --dev",
+    "dev": "tsup --watch",
     "build": "tsup",
     "test": "vitest",
     "start": "NODE_ENV=production node dist/server.mjs"
