@@ -11,19 +11,26 @@ import marky from 'marky'
 
 import mercurius, { IFieldResolver } from 'mercurius'
 
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 import { getDMMF } from '@prisma/sdk/dist/engine-commands/getDmmf.js'
 import { getSchemaSync } from '@prisma/sdk/dist/cli/getSchema.js'
+import LRU from 'lru-cache'
+
+import { highlight } from 'cli-highlight'
+import { format as sqlFormat } from 'sql-formatter'
 
 import { camelCase } from './utils'
 import { serializeRawResults } from './lib/prisma/serializeRawResult'
 import { digAggregateField } from './lib/prisma/digAggregateField'
-import { prismaQueryEvent } from './lib/prisma/prismaQueryEvent'
-import highlight from 'cli-highlight'
-import { retryMiddleware } from './lib/prisma/retryMiddleware'
+
+import { retryMiddleware } from './lib/prisma/middleware/retryMiddleware'
+import { logger } from './core/logger'
+import { createLRUCacheMiddleware } from './lib/prisma/middleware/createLRUCacheMiddleware'
 
 const __filename = url.fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+
+export const LOG = true
 
 marky.mark('ready')
 const dotenvSchema = {
@@ -45,15 +52,6 @@ const dotenvSchema = {
   },
 }
 
-const logger = pino({
-  transport: {
-    target: 'pino-pretty',
-    options: {
-      colorize: true,
-    },
-  },
-})
-
 async function main() {
   // PRISMA INIT
   marky.mark('prisma-connect')
@@ -65,12 +63,76 @@ async function main() {
         }
       : undefined,
   )
+
   db.$use(retryMiddleware())
+
+  if (LOG) {
+    db.$use(async (params, next) => {
+      const start = Date.now()
+      const result = await next(params)
+      const end = Date.now()
+      const duration = end - start
+      // prettier-ignore
+      logger.info(` ${duration.toFixed(2).padStart(8, ' ')} ms ${params.model}.${params.action}`)
+      return result
+    })
+  }
+
+  const cache = db.$use(
+    createLRUCacheMiddleware(
+      (params) => {
+        return (
+          params.model === 'urun' &&
+          ['findOne', 'queryRaw', `aggregate`, `findMany`].includes(
+            params.action,
+          )
+        )
+      },
+      new LRU<string, any>({
+        max: 500,
+        maxAge: 1000 * 60 * 60,
+      }),
+    ),
+  )
 
   await db.$connect()
   marky.stop('prisma-connect')
 
-  db.$on('query', prismaQueryEvent)
+  db.$on('query', (e) => {
+    if (LOG) {
+      let query = e.query.replaceAll('"public".', '')
+      ;(JSON.parse(e.params ?? '[]') as any[]).forEach((val, index) => {
+        if (typeof val == 'string') {
+          val = `'${val}'`
+        }
+        if (typeof val == 'boolean') {
+          val = val ? 'true' : 'false'
+        }
+        query = query.replace(`$${index + 1}`, val)
+      })
+
+      query = sqlFormat(query, {
+        language: 'postgresql',
+        tabWidth: 2,
+        keywordCase: 'lower',
+        linesBetweenQueries: 2,
+        tabulateAlias: true,
+      })
+
+      logger.info(
+        '🟧 onQuery\n' +
+          highlight(query, {
+            language: 'sql',
+            ignoreIllegals: true,
+          }) +
+          '\n' +
+          JSON.parse(e.params ?? '[]') +
+          ' ' +
+          e.duration +
+          'ms',
+      )
+    }
+  })
 
   let certsDir = path.join(__dirname, '..', 'certs')
 
@@ -78,7 +140,7 @@ async function main() {
     !fs.existsSync(path.join(certsDir, 'cert-key.pem')) ||
     !fs.existsSync(path.join(certsDir, 'cert.pem'))
   ) {
-    console.error('certs not found!', { certsDir })
+    logger.error('certs not found!', { certsDir })
     process.exit()
   }
 
@@ -259,8 +321,8 @@ async function main() {
             .findUnique({ where: { [idFieldName]: parent[idFieldName] } })
             [field.name](args)
 
-          if (process.env.NODE_ENV == 'development') {
-            console.log(
+          if (LOG) {
+            logger.info(
               `🔗 ${model.name}.${field.name}(${JSON.stringify(args)})`,
               result[0],
             )
@@ -436,14 +498,13 @@ async function main() {
   // hooks
   //  preParsing | preValidation | preExecution | onResolution
   app.graphql.addHook('preParsing', async function (schema, source, context) {
-    if (process.env.NODE_ENV == 'development') {
-      logger.info('preParsing')
-      console.log(''.padStart(100, '🟦'))
-      console.log(
-        highlight(source, {
-          language: 'json',
-          ignoreIllegals: true,
-        }),
+    if (LOG) {
+      logger.info(
+        '🟦 preParsing\n' +
+          highlight(source, {
+            language: 'json',
+            ignoreIllegals: true,
+          }),
       )
     }
   })
@@ -456,11 +517,13 @@ async function main() {
     )
     gracefulServer.setReady()
     marky.stop('ready')
-    marky.getEntries().forEach((entry) => {
-      app.log.info(
-        `⏱  ${entry.duration.toFixed(2).padStart(8, ' ')} ms   ${entry.name}`,
-      )
-    })
+    if (LOG) {
+      marky.getEntries().forEach((entry) => {
+        app.log.info(
+          `⏱  ${entry.duration.toFixed(2).padStart(8, ' ')} ms   ${entry.name}`,
+        )
+      })
+    }
   } catch (err) {
     logger.error(err)
     process.exit(1)
