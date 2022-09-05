@@ -6,7 +6,7 @@
     "dev": "tsup --watch",
     "build": "tsup",
     "test": "vitest",
-    "start": "NODE_ENV=production node dist/server.mjs"
+    "start": "NODE_ENV=production node dist/src/server.mjs"
   },
   "config": {
     "commitizen": {
@@ -23,6 +23,7 @@
     "decimal.js": "^10.4.0",
     "fastify": "^4.5.3",
     "graphql": "^16.6.0",
+    "lru-cache": "^7.14.0",
     "marky": "^1.2.5",
     "mercurius": "^11.0.0",
     "pino": "^8.4.2",

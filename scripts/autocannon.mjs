@@ -2,8 +2,8 @@ import { $ } from 'zx'
 import autocannon from 'autocannon'
 
 const instance = autocannon({
-  connections: 20,
-  duration: 60,
+  connections: 10,
+  duration: 10,
   //
   url: 'https://localhost:3010/*',
   headers: {

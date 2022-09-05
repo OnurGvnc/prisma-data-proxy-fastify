@@ -43,7 +43,9 @@ export const retryMiddleware = (options?: RetryOptions): Prisma.Middleware => {
     let retries = 0
     do {
       try {
-        console.log('middleware retries', retries)
+        if (retries > 0) {
+          console.log('middleware retries', retries)
+        }
         const result = await next(params)
         return result
       } catch (err) {

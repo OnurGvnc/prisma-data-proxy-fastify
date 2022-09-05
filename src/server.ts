@@ -30,7 +30,7 @@ import { createLRUCacheMiddleware } from './lib/prisma/middleware/createLRUCache
 const __filename = url.fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-export const LOG = true
+export const LOG = false
 
 marky.mark('ready')
 const dotenvSchema = {
@@ -78,10 +78,11 @@ async function main() {
     })
   }
 
-  const cache = db.$use(
+  db.$use(
     createLRUCacheMiddleware(
       (params) => {
         return (
+          false &&
           params.model === 'urun' &&
           ['findOne', 'queryRaw', `aggregate`, `findMany`].includes(
             params.action,
@@ -89,7 +90,7 @@ async function main() {
         )
       },
       new LRU<string, any>({
-        max: 500,
+        ttl: 500,
         maxAge: 1000 * 60 * 60,
       }),
     ),
@@ -150,7 +151,7 @@ async function main() {
       key: fs.readFileSync(path.join(certsDir, 'cert-key.pem')),
       cert: fs.readFileSync(path.join(certsDir, 'cert.pem')),
     },
-    logger,
+    logger: process.env.NODE_ENV == 'development' ? logger : false,
   })
 
   const gracefulServer = GracefulServer(app.server)

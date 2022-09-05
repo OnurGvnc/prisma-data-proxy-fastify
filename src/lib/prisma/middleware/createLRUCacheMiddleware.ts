@@ -28,3 +28,8 @@ export function createLRUCacheMiddleware(
     return result
   }
 }
+
+// others
+//  - https://www.npmjs.com/package/prisma-redis-middleware
+//  - https://www.npmjs.com/package/prisma-lrucache-middleware
+//  - https://www.npmjs.com/package/prisma-cache-middleware
