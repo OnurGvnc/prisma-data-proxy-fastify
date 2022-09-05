@@ -12,6 +12,8 @@ import marky from 'marky'
 import mercurius, { IFieldResolver } from 'mercurius'
 
 import { Prisma, PrismaClient } from '@prisma/client'
+import { enginesVersion } from '@prisma/engines-version'
+
 import { getDMMF } from '@prisma/sdk/dist/engine-commands/getDmmf.js'
 import { getSchemaSync } from '@prisma/sdk/dist/cli/getSchema.js'
 import LRU from 'lru-cache'
@@ -479,8 +481,12 @@ async function main() {
 
   marky.mark('mercurius')
   app.register(mercurius, {
+    // path: '/*',
     // path: '/4.3.0/1652b26cd5d76232b4f6130712465b4d89c28f0a05c9f2007753c76150c738dd/graphql',
-    path: '/*',
+    // prettier-ignore
+    // @ts-ignore
+    path: `/${Prisma.prismaVersion.client}/${Prisma.prismaVersion?.engine ?? enginesVersion}/graphql`,
+
     schema,
     resolvers,
     graphiql: true,
