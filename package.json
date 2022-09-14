@@ -1,5 +1,5 @@
 {
-  "name": "@smoxh/server-new",
+  "name": "prisma-data-proxy",
   "version": "0.0.1",
   "private": true,
   "scripts": {
