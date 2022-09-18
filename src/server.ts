@@ -80,23 +80,23 @@ async function main() {
     })
   }
 
-  db.$use(
-    createLRUCacheMiddleware(
-      (params) => {
-        return (
-          false &&
-          params.model === 'urun' &&
-          ['findOne', 'queryRaw', `aggregate`, `findMany`].includes(
-            params.action,
-          )
-        )
-      },
-      new LRU<string, any>({
-        ttl: 500,
-        maxAge: 1000 * 60 * 60,
-      }),
-    ),
-  )
+  // db.$use(
+  //   createLRUCacheMiddleware(
+  //     (params) => {
+  //       return (
+  //         false &&
+  //         params.model === 'urun' &&
+  //         ['findOne', 'queryRaw', `aggregate`, `findMany`].includes(
+  //           params.action,
+  //         )
+  //       )
+  //     },
+  //     new LRU<string, any>({
+  //       ttl: 500,
+  //       maxAge: 1000 * 60 * 60,
+  //     }),
+  //   ),
+  // )
 
   await db.$connect()
   marky.stop('prisma-connect')

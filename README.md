@@ -1,3 +1,7 @@
+Take a look at other GO-based implementation https://github.com/OnurGvnc/prisma-data-proxy
+
+---
+
 # Fastify + Mercurius based Alternative [Prisma Data Proxy](https://www.prisma.io/docs/concepts/data-platform/data-proxy)
 
 IMPROTANT! This project is an experimental study.
